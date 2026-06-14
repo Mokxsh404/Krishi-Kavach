@@ -34,19 +34,19 @@
 // Mode 0: Raw TCP Socket Stream (Magic Bytes 0xAA 0xBB 0xCC 0xDD, port 5001)
 // Mode 1: HTTP POST Stream over TCP (Plain HTTP upload, port 80)
 // Mode 2: HTTPS POST Stream over SSL (Secure HTTPS upload, port 443)
-#define CONNECTION_MODE 0
+#define CONNECTION_MODE 2
 
 // IMPORTANT: Enter your server address.
 // For Mode 0: public endpoint from ngrok tcp (e.g. "0.tcp.ngrok.io") or pinggy.
 // For Mode 1/2: your hosted web server address (e.g. "your-app.onrender.com" or "your-app.up.railway.app").
 // DO NOT include "http://" or "https://" or "/" in the serverIp!
-const char* serverIp = "wknpa-2409-40e7-1b7-c26f-38d6-37dd-9110-5dbd.run.pinggy-free.link"; 
+const char* serverIp = "krishi-kavach.onrender.com"; 
 
 // Server Port:
 // - For Mode 0: Use the TCP port given by the tunnel (e.g. 12345).
 // - For Mode 1: Use 80 (HTTP).
 // - For Mode 2: Use 443 (HTTPS).
-const uint16_t serverPort = 43293; 
+const uint16_t serverPort = 443; 
 
 // APN config (usually empty/automatic for LTE Cat-1, but can be set if needed)
 const char* apn = ""; 
@@ -318,30 +318,40 @@ void loop() {
           sendATCommand("AT+CGDCONT=1,\"IP\",\"" + String(apn) + "\"", "OK", 3000);
         }
         
-        // Set transparent TCP mode
-        if (sendATCommand("AT+CIPMODE=1", "OK", 3000)) {
-          #if CONNECTION_MODE == 2
-            // Configure SSL Context 0 for TLS 1.2 and bypass certification validation
-            sendATCommand("AT+CSSLCFG=\"sslversion\",0,4", "OK", 2000);
-            sendATCommand("AT+CSSLCFG=\"authmode\",0,0", "OK", 2000);
-            // Ignore certificate expiration date/time checks (important if board clock is unset)
-            sendATCommand("AT+CSSLCFG=\"ignorertctime\",0,1", "OK", 2000);
-            // Bind session 0 to SSL context 0
-            sendATCommand("AT+CCHSSLCFG=0,0", "OK", 2000);
-            // Start common channel service
-            if (sendATCommand("AT+CCHSTART", "OK", 3000)) {
-              changeState(STATE_CHECK_NET, "GSM module & SSL service initialized");
-            } else {
-              Serial.println("Failed to start SSL service. Retrying...");
-              delay(2000);
-            }
-          #else
+        #if CONNECTION_MODE == 2
+          // ---- SSL/HTTPS Mode (uses CCH commands, NOT CIPMODE) ----
+          // Configure SSL Context 0 for TLS 1.2 and bypass cert validation
+          sendATCommand("AT+CSSLCFG=\"sslversion\",0,4", "OK", 2000);
+          sendATCommand("AT+CSSLCFG=\"authmode\",0,0", "OK", 2000);
+          // Ignore certificate expiration date/time checks (important if board clock is unset)
+          sendATCommand("AT+CSSLCFG=\"ignorertctime\",0,1", "OK", 2000);
+          // *** CRITICAL: Enable SNI (Server Name Indication) ***
+          // Required by cloud hosts like Render that use shared hosting/reverse proxies.
+          // Without SNI, the TLS handshake fails with CCHOPEN error 15.
+          sendATCommand("AT+CSSLCFG=\"enableSNI\",0,1", "OK", 2000);
+          // Enable CCH transparent mode (data piped directly to/from serial)
+          sendATCommand("AT+CCHMODE=1", "OK", 2000);
+          // Enable +CCHSEND result reporting
+          sendATCommand("AT+CCHSET=1", "OK", 2000);
+          // Bind CCH session 0 to SSL context 0
+          sendATCommand("AT+CCHSSLCFG=0,0", "OK", 2000);
+          // Start common channel SSL service
+          if (sendATCommand("AT+CCHSTART", "OK", 5000)) {
+            changeState(STATE_CHECK_NET, "GSM module & SSL service initialized");
+          } else {
+            Serial.println("Failed to start SSL service. Retrying...");
+            delay(2000);
+          }
+        #else
+          // ---- TCP/HTTP Mode (uses CIPOPEN with transparent mode) ----
+          // Set transparent TCP mode (only for CIPOPEN, not CCHOPEN)
+          if (sendATCommand("AT+CIPMODE=1", "OK", 3000)) {
             changeState(STATE_CHECK_NET, "GSM module initialized");
-          #endif
-        } else {
-          Serial.println("Failed to set Transparent Mode. Retrying...");
-          delay(2000);
-        }
+          } else {
+            Serial.println("Failed to set Transparent Mode. Retrying...");
+            delay(2000);
+          }
+        #endif
       } else {
         Serial.println("A7670C not responding to AT. Check wiring and power.");
         delay(3000);
@@ -393,27 +403,46 @@ void loop() {
     case STATE_CONNECT_TCP: {
       #if CONNECTION_MODE == 2
         Serial.printf("Connecting to HTTPS server %s:%d using SSL...\n", serverIp, serverPort);
+        // CCHOPEN: session 0, host, port, 2=SSL
+        // In CCH transparent mode, successful connection returns +CCHOPEN: 0,0 then enters data mode
         String connCmd = "AT+CCHOPEN=0,\"" + String(serverIp) + "\"," + String(serverPort) + ",2";
+        
+        // For CCHOPEN in transparent mode, the module returns +CCHOPEN: 0,0 on success
+        // and then enters transparent data mode (like CONNECT for CIPOPEN)
+        if (sendATCommand(connCmd, "CONNECT", 60000)) {
+          Serial.println("SSL Connection established! Entering Streaming mode.");
+          reconnectAttempts = 0;
+          changeState(STATE_STREAMING, "SSL socket connected");
+        } else {
+          Serial.println("SSL Connection failed.");
+          reconnectAttempts++;
+          if (reconnectAttempts > 3) {
+            reconnectAttempts = 0;
+            changeState(STATE_DISCONNECT, "Too many SSL connection failures, resetting");
+          } else {
+            delay(5000);
+          }
+        }
       #else
         Serial.printf("Connecting to TCP/HTTP server %s:%d...\n", serverIp, serverPort);
         String connCmd = "AT+CIPOPEN=0,\"TCP\",\"" + String(serverIp) + "\"," + String(serverPort);
-      #endif
-      
-      // In transparent mode, successful connection returns CONNECT
-      if (sendATCommand(connCmd, "CONNECT", 35000)) {
-        Serial.println("Connection established! Entering Streaming mode.");
-        reconnectAttempts = 0;
-        changeState(STATE_STREAMING, "Socket connected");
-      } else {
-        Serial.println("Connection failed.");
-        reconnectAttempts++;
-        if (reconnectAttempts > 3) {
+        
+        // In transparent mode, successful connection returns CONNECT
+        if (sendATCommand(connCmd, "CONNECT", 35000)) {
+          Serial.println("Connection established! Entering Streaming mode.");
           reconnectAttempts = 0;
-          changeState(STATE_DISCONNECT, "Too many connection failures, resetting connection");
+          changeState(STATE_STREAMING, "Socket connected");
         } else {
-          delay(5000);
+          Serial.println("Connection failed.");
+          reconnectAttempts++;
+          if (reconnectAttempts > 3) {
+            reconnectAttempts = 0;
+            changeState(STATE_DISCONNECT, "Too many connection failures, resetting connection");
+          } else {
+            delay(5000);
+          }
         }
-      }
+      #endif
       break;
     }
     
@@ -525,18 +554,21 @@ void loop() {
     case STATE_DISCONNECT: {
       exitTransparentMode();
       
-      // Close TCP/SSL socket
-      sendATCommand("AT+CIPCLOSE=0", "OK", 3000);
       #if CONNECTION_MODE == 2
+        // Close SSL socket and stop CCH service
         sendATCommand("AT+CCHCLOSE=0", "OK", 3000);
         sendATCommand("AT+CCHSTOP", "OK", 3000);
+      #else
+        // Close TCP socket
+        sendATCommand("AT+CIPCLOSE=0", "OK", 3000);
       #endif
       
       // Close network
       sendATCommand("AT+NETCLOSE", "OK", 5000);
       
       delay(2000);
-      changeState(STATE_CHECK_NET, "Connection reset completed");
+      // Go back to INIT to fully re-initialize SSL service
+      changeState(STATE_INIT, "Connection reset, re-initializing");
       break;
     }
   }
