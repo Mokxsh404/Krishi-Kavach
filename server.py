@@ -276,14 +276,17 @@ if __name__ == '__main__':
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static', exist_ok=True)
     
-    # Start thread to automatically open the web browser
-    def auto_open():
-        time.sleep(1.0)
-        import webbrowser
-        print("[Flask] Opening dashboard in browser: http://localhost:5000")
-        webbrowser.open("http://localhost:5000")
-        
-    threading.Thread(target=auto_open, daemon=True).start()
+    port = int(os.environ.get("PORT", 5000))
     
-    print("[Flask] Starting Web Server on http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    # Start thread to automatically open the web browser only if running locally
+    if not os.environ.get("RENDER"):
+        def auto_open():
+            time.sleep(1.0)
+            import webbrowser
+            print(f"[Flask] Opening dashboard in browser: http://localhost:{port}")
+            webbrowser.open(f"http://localhost:{port}")
+            
+        threading.Thread(target=auto_open, daemon=True).start()
+    
+    print(f"[Flask] Starting Web Server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
