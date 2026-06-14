@@ -26,7 +26,7 @@
 // ==========================================
 // Mode 1: High FPS Mode (QVGA 320x240, ~10-15 FPS, very fluid)
 // Mode 2: High Detail Mode (VGA 640x480, ~3-5 FPS, super sharp)
-#define STREAM_MODE 2
+#define STREAM_MODE 1  // 1=QVGA(fast, ~5KB frames) 2=VGA(detailed, ~19KB frames)
 
 // ==========================================
 // Connection Mode Configuration
@@ -178,7 +178,7 @@ void initCamera() {
     if (psramFound()) {
       config.fb_location = CAMERA_FB_IN_PSRAM;
       config.fb_count = 2;
-      config.jpeg_quality = 10; // Optimized size/quality balance for high FPS
+      config.jpeg_quality = 14; // Higher number = smaller file = faster SSL upload
       Serial.println("PSRAM found. QVGA configured in PSRAM.");
     } else {
       config.fb_location = CAMERA_FB_IN_DRAM;
@@ -517,7 +517,7 @@ void loop() {
         uint32_t respStart = millis();
         String rx = "";
         bool headerEnded = false;
-        while (millis() - respStart < 2000) {
+        while (millis() - respStart < 800) {
           if (gsm.available()) {
             char c = gsm.read();
             rx += c;
