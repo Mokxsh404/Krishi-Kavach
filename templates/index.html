@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XIAO ESP32S3 GSM Stream Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background-decor">
+        <div class="circle c1"></div>
+        <div class="circle c2"></div>
+    </div>
+    
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <span class="pulse-dot status-indicator"></span>
+                <h1>GSM Live Stream</h1>
+                <span class="badge">A7670C LTE</span>
+            </div>
+            <p class="subtitle">Seeed Studio XIAO ESP32S3 Sense Cellular Streamer</p>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Panel: Live Stream -->
+            <section class="card stream-card">
+                <div class="card-header">
+                    <h2>Live Feed</h2>
+                    <div class="controls">
+                        <button id="btnFullscreen" class="btn" title="Toggle Fullscreen">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                        <button id="btnSnapshot" class="btn" title="Take Snapshot">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="video-container">
+                    <!-- Stream active img -->
+                    <img id="mjpegStream" src="" alt="Live Video Feed" class="hidden">
+                    
+                    <!-- Fallback placeholder -->
+                    <div id="streamPlaceholder" class="placeholder-active">
+                        <div class="spinner"></div>
+                        <p class="placeholder-text">Waiting for ESP32 GSM module connection...</p>
+                        <p class="placeholder-tip">Ensure `server.py` is running, your `ngrok` tunnel is active, and the ESP32 is powered on.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Telemetry & Info -->
+            <section class="side-panel">
+                
+                <!-- Telemetry Stats -->
+                <div class="card stats-card">
+                    <h2>System Telemetry</h2>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Connection</span>
+                            <span id="txtConnection" class="stat-value text-red">Offline</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Frame Rate</span>
+                            <span id="txtFPS" class="stat-value">0.0 <span class="unit">FPS</span></span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Data Speed</span>
+                            <span id="txtSpeed" class="stat-value">0.0 <span class="unit">KB/s</span></span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Frames Received</span>
+                            <span id="txtFrames" class="stat-value">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Info & Settings -->
+                <div class="card info-card">
+                    <h2>Configuration Info</h2>
+                    <div class="info-list">
+                        <div class="info-item">
+                            <span class="info-label">Public TCP Tunnel</span>
+                            <span id="txtNgrokUrl" class="info-val text-red">Not Configured</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">TCP Local Port</span>
+                            <span class="info-val">5001</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">HTTP Local Port</span>
+                            <span class="info-val">5000</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Resolution</span>
+                            <span id="txtResolution" class="info-val">320x240 (QVGA)</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Payload Format</span>
+                            <span class="info-val">RAW JPEG</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help / Troubleshooting -->
+                <div class="card help-card">
+                    <h2>Connection Quick Guide</h2>
+                    <ol class="guide-steps">
+                        <li>Expose TCP: <code>ngrok tcp 5001</code></li>
+                        <li>Update <code>hlwww.ino</code> with the ngrok address and port.</li>
+                        <li>Flash ESP32, and check this UI for the feed!</li>
+                    </ol>
+                </div>
+
+            </section>
+        </main>
+        
+        <!-- Footer -->
+        <footer>
+            <p>Designed with Antigravity AI &bull; Premium Dashboards</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

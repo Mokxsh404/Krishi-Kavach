@@ -1,0 +1,18 @@
+# System
+.system_generated/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+
+# Private credentials
+ngrok_token.txt
+.env
+
+# Local IDE files
+.vscode/
+.idea/
